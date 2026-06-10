@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cafè</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+theme: { extend: {
+fontFamily: {
+serif: ['Instrument Serif', 'ui-serif', 'Georgia', 'serif'],
+sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+},
+} },
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/ScrollTrigger.min.js"></script>
+
+<style>
+html { scroll-behavior: smooth; }
+
+body {
+ margin:0;
+ font-family:'Inter',sans-serif;
+ background: linear-gradient(180deg, #0A1929 0%, #0F2F47 50%, #1A4565 100%);
+ color:#EAF6FF;
+ overflow-x:hidden;
+}
+
+#video-bg video {
+ position:absolute;
+ top:50%;
+ left:50%;
+ transform:translate(-50%, -50%);
+ min-width:100%;
+ min-height:100%;
+ object-fit:cover;
+}
+
+.video-overlay{
+ position:absolute;
+ inset:0;
+ background:
+ linear-gradient(180deg, rgba(7,18,28,0.52) 0%, rgba(8,25,38,0.42) 30%, rgba(9,22,34,0.76) 100%);
+}
+
+.caustics {
+ position: fixed; inset: 0; pointer-events: none; z-index: 1;
+ background:
+ radial-gradient(ellipse 60% 50% at 30% 20%, rgba(150,220,255,0.18), transparent 50%),
+ radial-gradient(ellipse 50% 60% at 80% 60%, rgba(200,240,255,0.10), transparent 60%);
+ animation: caustic 15s ease-in-out infinite alternate;
+}
+
+@keyframes caustic {
+ 0% { transform: translate(0,0) scale(1); }
+ 50% { transform: translate(-20px,15px) scale(1.05); }
+ 100% { transform: translate(15px,-10px) scale(0.98); }
+}
+
+.sunbeam {
+ position: fixed; top: 0; left: 50%; pointer-events: none; z-index: 1;
+ width: 120%; height: 70vh;
+ background: linear-gradient(180deg, rgba(255,240,200,0.10), transparent 70%);
+ transform: translateX(-50%) rotate(8deg);
+ filter: blur(30px);
+}
+
+.scroll-reveal { margin: 0; }
+.scroll-reveal-text { display: flex; flex-wrap: wrap; margin: 0; }
+.word { display: inline-block; white-space: pre; }
+
+[data-reveal] {
+ opacity: 0;
+ transform: translateY(30px);
+ transition:
+ opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+ transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+ transition-delay: calc(var(--reveal-delay, 0) * 1s);
+}
+
+[data-reveal="visible"] {
+ opacity:1;
+ transform:translateY(0);
+}
+
+#loading{
+ position:fixed;
+ inset:0;
+ z-index:50;
+ background:#081522;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ flex-direction:column;
+ transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.loading-ring{
+ width:64px;
+ height:64px;
+ border-radius:9999px;
+ border:1px solid rgba(255,255,255,0.2);
+ border-top-color:rgba(255,255,255,0.8);
+ animation:spin 1s linear infinite;
+ margin-bottom:24px;
+}
+
+@keyframes spin{
+ to{ transform:rotate(360deg); }
+}
+
+body[data-loaded="true"] #loading {
+ opacity:0;
+ visibility:hidden;
+ pointer-events:none;
+}
+
+.glass{
+ background:rgba(180,220,255,0.08);
+ backdrop-filter:blur(18px);
+ border:1px solid rgba(255,255,255,0.08);
+}
+
+.hairline{
+ position:relative;
+}
+
+.hairline::after{
+ content:'';
+ position:absolute;
+ left:0;
+ bottom:-6px;
+ width:100%;
+ height:1px;
+ background:rgba(220,240,255,0.22);
+ transform-origin:left;
+ transition:transform 0.5s cubic-bezier(0.16,1,0.3,1);
+}
+
+.hairline:hover::after{
+ transform:scaleX(0.4);
+}
+
+.noise{
+ position:fixed;
+ inset:0;
+ pointer-events:none;
+ opacity:0.04;
+ z-index:2;
+ background-image:
+ radial-gradient(circle at 20% 20%, white 1px, transparent 1px),
+ radial-gradient(circle at 80% 60%, white 1px, transparent 1px);
+ background-size: 120px 120px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loading">
+  <div class="loading-ring"></div>
+  <div class="text-blue-100/80 tracking-[0.3em] uppercase text-xs">Descending into memory</div>
+</div>
+
+<div id="video-bg" class="fixed inset-0 z-0 bg-black">
+ <video id="hero-video" muted playsinline preload="auto">
+   <source src="hero.mp4" type="video/mp4" />
+ </video>
+ <div class="video-overlay"></div>
+</div>
+
+<div class="caustics"></div>
+<div class="sunbeam"></div>
+<div class="noise"></div>
+
+<header class="fixed top-0 left-0 w-full z-20 px-6 md:px-12 py-8 flex justify-between items-center">
+  <div class="text-blue-50/85 font-serif italic text-2xl">
+    Wang Shengzhe
+  </div>
+
+  <nav class="hidden md:flex gap-8 text-xs uppercase tracking-[0.22em] text-blue-100/70">
+    <a href="#index" class="hairline">Index</a>
+    <a href="#research" class="hairline">Research</a>
+    <a href="#speaking" class="hairline">Speaking</a>
+    <a href="#philosophy" class="hairline">Philosophy</a>
+    <a href="#contact" class="hairline">Contact</a>
+  </nav>
+</header>
+
+<main class="relative z-10">
+
+<section id="index" class="min-h-screen flex items-end md:items-center px-6 md:px-16 pb-20 md:pb-0">
+  <div class="max-w-5xl">
+
+    <div data-reveal style="--reveal-delay:0.1" class="mb-6 uppercase tracking-[0.35em] text-xs text-blue-100/55">
+       Life moves fast, so we slow it down here.
+    </div>
+
+    <h1 data-reveal style="--reveal-delay:0.2"
+      class="font-serif text-blue-50/95 leading-[0.92] text-[18vw] md:text-[8vw] tracking-[-0.04em]">
+      Below<br/>the surface
+    </h1>
+
+    <p data-reveal style="--reveal-delay:0.4"
+      class="max-w-2xl mt-10 text-lg md:text-2xl leading-relaxed text-blue-100/78 font-medium">
+      Here, warmth is free.
+    </p>
+
+    <div data-reveal style="--reveal-delay:0.6" class="mt-14">
+      <a href="#research"
+        class="inline-flex items-center gap-4 text-blue-50/90 uppercase tracking-[0.25em] text-xs">
+        Descend ↓
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<section id="research" class="min-h-screen px-6 md:px-16 py-24 flex flex-col justify-center">
+
+  <div class="grid md:grid-cols-12 gap-10">
+
+    <div class="md:col-span-4">
+      <div data-reveal style="--reveal-delay:0.1"
+        class="text-blue-100/40 uppercase tracking-[0.28em] text-xs mb-6">
+        Research & Systems
+      </div>
+
+      <div data-reveal style="--reveal-delay:0.2"
+        class="font-serif text-5xl md:text-7xl text-blue-50/90 leading-none">
+        Cloud<br/>and<br/>Water
+      </div>
+    </div>
+
+    <div class="md:col-span-8">
+      <h2 data-scroll-reveal
+        data-text-class="font-medium tracking-tight text-blue-100/88 text-3xl md:text-5xl leading-[1.15]">
+        Silence is welcome.
+      </h2>
+
+      <div class="mt-20 grid md:grid-cols-2 gap-8">
+
+        <div data-reveal style="--reveal-delay:0.2"
+          class="glass p-8">
+          <div class="text-blue-100/40 uppercase tracking-[0.25em] text-xs mb-5">
+            And human connection is gently made.
+          </div>
+          <p class="text-blue-50/80 leading-relaxed text-lg">
+            From bean to cup, from silence to talk, Cafè is designed to slow life just enough so people can notice each other again.
+          </p>
+        </div>
+
+        <div data-reveal style="--reveal-delay:0.35"
+          class="glass p-8">
+          <div class="text-blue-100/40 uppercase tracking-[0.25em] text-xs mb-5">
+            Built by Xiexie Inc.
+          </div>
+          <p class="text-blue-50/80 leading-relaxed text-lg">
+            Founded by Shengzhe Wang.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+<section id="speaking" class="min-h-screen px-6 md:px-16 py-24 flex items-center">
+
+  <div class="max-w-6xl w-full grid md:grid-cols-2 gap-16 items-end">
+
+    <div>
+      <div data-reveal style="--reveal-delay:0.1"
+        class="text-blue-100/45 uppercase tracking-[0.25em] text-xs mb-6">
+        Speaking
+      </div>
+
+      <div data-reveal style="--reveal-delay:0.2"
+        class="font-serif text-6xl md:text-8xl leading-[0.95] text-blue-50/95">
+        Surface<br/>to stage
+      </div>
+    </div>
+
+    <div class="space-y-10">
+
+      <div data-reveal style="--reveal-delay:0.25"
+        class="border-t border-blue-100/10 pt-6">
+        <div class="text-blue-100/35 uppercase tracking-[0.25em] text-xs mb-3">
+          2026
+        </div>
+        <div class="text-blue-50/82 text-2xl font-medium">
+          United Nations
+        </div>
+      </div>
+
+      <div data-reveal style="--reveal-delay:0.35"
+        class="border-t border-blue-100/10 pt-6">
+        <div class="text-blue-100/35 uppercase tracking-[0.25em] text-xs mb-3">
+          Cambridge
+        </div>
+        <div class="text-blue-50/82 text-2xl font-medium">
+          MIT Media Lab
+        </div>
+      </div>
+
+      <div data-reveal style="--reveal-delay:0.45"
+        class="border-t border-blue-100/10 pt-6">
+        <div class="text-blue-100/35 uppercase tracking-[0.25em] text-xs mb-3">
+          Focus
+        </div>
+        <div class="text-blue-50/82 text-2xl font-medium">
+          AI · Immersion · Human Narratives
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+<section id="philosophy" class="min-h-screen px-6 md:px-16 py-32 flex flex-col justify-center">
+
+  <div class="max-w-5xl">
+    <div data-reveal style="--reveal-delay:0.1"
+      class="text-blue-100/40 uppercase tracking-[0.28em] text-xs mb-8">
+      Philosophy
+    </div>
+
+    <h2 data-scroll-reveal
+      data-text-class="font-medium tracking-tight text-blue-50/90 text-4xl md:text-6xl leading-[1.15]">
+      Between silver light and dark water, I document moments where technology stops performing and starts revealing something human.
+    </h2>
+  </div>
+
+</section>
+
+<footer id="contact" class="relative z-10 px-6 md:px-16 py-24 border-t border-blue-100/10">
+
+  <div class="grid md:grid-cols-4 gap-14">
+
+    <div>
+      <div class="font-serif italic text-4xl text-blue-50/92">
+        Wang<br/>Shengzhe
+      </div>
+    </div>
+
+    <div>
+      <div class="uppercase tracking-[0.25em] text-xs text-blue-100/40 mb-5">
+        Research
+      </div>
+      <div class="space-y-3 text-blue-50/75">
+        <div>Immersive Media</div>
+        <div>AI Narratives</div>
+        <div>Human Systems</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="uppercase tracking-[0.25em] text-xs text-blue-100/40 mb-5">
+        Presence
+      </div>
+      <div class="space-y-3 text-blue-50/75">
+        <div>MIT Media Lab</div>
+        <div>United Nations</div>
+        <div>Cambridge</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="uppercase tracking-[0.25em] text-xs text-blue-100/40 mb-5">
+        Contact
+      </div>
+      <div class="space-y-3 text-blue-50/75">
+        <div>hello@shengzhe.world</div>
+        <div>@shengzhewang</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="mt-20 text-blue-100/30 text-xs tracking-[0.2em] uppercase">
+    © 2026 Wang Shengzhe — descend / surface / memory
+  </div>
+
+</footer>
+
+</main>
+
+<script>
+const VIDEO_URL = 'hero.mp4';
+const video = document.getElementById('hero-video');
+let isLoaded = false;
+
+const handleLoaded = () => {
+ if (isLoaded) return;
+ isLoaded = true;
+ document.body.dataset.loaded = 'true';
+};
+
+if (video) {
+ video.addEventListener('loadeddata', handleLoaded);
+ video.addEventListener('canplay', handleLoaded);
+ video.addEventListener('canplaythrough', handleLoaded);
+ video.load();
+}
+
+setTimeout(handleLoaded, 3000);
+
+window.addEventListener('scroll', () => {
+ if (!isLoaded || !video || !video.duration || video.seeking) return;
+ const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+ const scrollFraction = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+ video.currentTime = scrollFraction * video.duration;
+}, { passive: true });
+
+if (window.gsap && window.ScrollTrigger) {
+ gsap.registerPlugin(ScrollTrigger);
+
+ document.querySelectorAll('[data-scroll-reveal]').forEach((el) => {
+ const text = el.textContent || '';
+ el.textContent = '';
+ el.classList.add('scroll-reveal');
+
+ const p = document.createElement('p');
+ p.className = 'scroll-reveal-text ' + (el.dataset.textClass || '');
+
+ text.split(/(\s+)/).forEach((part) => {
+ if (!part) return;
+ const span = document.createElement('span');
+ span.className = 'word';
+ span.textContent = part;
+ p.appendChild(span);
+ });
+
+ el.appendChild(p);
+
+ gsap.fromTo(el,
+ { rotate: 3, transformOrigin: '0% 50%' },
+ { rotate: 0, ease: 'none',
+ scrollTrigger: {
+ trigger: el,
+ start: 'top bottom',
+ end: 'bottom bottom',
+ scrub: true
+ }});
+
+ gsap.fromTo(p.querySelectorAll('.word'),
+ { opacity: 0.1 },
+ { opacity: 1,
+ stagger: 0.05,
+ ease: 'none',
+ scrollTrigger: {
+ trigger: el,
+ start: 'top bottom-=20%',
+ end: 'bottom bottom',
+ scrub: true
+ }});
+
+ gsap.fromTo(p.querySelectorAll('.word'),
+ { filter: 'blur(4px)' },
+ { filter: 'blur(0px)',
+ stagger: 0.05,
+ ease: 'none',
+ scrollTrigger: {
+ trigger: el,
+ start: 'top bottom-=20%',
+ end: 'bottom bottom',
+ scrub: true
+ }});
+ });
+}
+
+const revealObserver = new IntersectionObserver((entries) => {
+ entries.forEach((entry) => {
+ if (entry.isIntersecting) {
+ entry.target.dataset.reveal = 'visible';
+ revealObserver.unobserve(entry.target);
+ }
+ });
+}, { rootMargin: '-50px' });
+
+document.querySelectorAll('[data-reveal]').forEach((el) =>
+revealObserver.observe(el));
+</script>
+
+</body>
+</html>
